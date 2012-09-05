@@ -85,12 +85,12 @@ function jsonpy(o, d, f, a) {
 		script.addEventListener('error', error, true);
 
 		if (o.done) promise.done(o.done);
-		if (o.fail) promise.done(o.fail);
-		if (o.always) promise.done(o.always);
+		if (o.fail) promise.fail(o.fail);
+		if (o.always) promise.always(o.always);
 
 		if (d) promise.done(d);
-		if (f) promise.done(f);
-		if (a) promise.done(a);
+		if (f) promise.fail(f);
+		if (a) promise.always(a);
 	},
 	
 	// perform request
