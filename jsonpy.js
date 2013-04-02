@@ -11,22 +11,25 @@ function jsonpy(o, d, f, a) {
 	timeout		= o.timeout || false,
 	timeoutId	= null,
 	
+	// script tag for json
 	script 		= document.createElement('script'),
 	
+	//internal part of promise object
+	resolver = null,
+	// promise object which will be returned
+	promise = null,
 	// execution status: null if not executed, 'done' or 'fail'
 	status		= null,
 	// arguments for callbacks
 	cbArgs		= null,
-	// callbacks collection
+	// callbacks
 	callbacks	= {done: [], fail: [], always: []},
-	
-	resolver = null,
-	/**
-	 * @type {jQuery.Deferred|Q.defer|object}
-	 */
-	promise = null,
 
-	createPromise = function() {
+	/**
+	 * create very simple native promise object
+	 * @return {object}
+	 */
+	createNativePromise = function() {
 		return {
 			done: function(callback) {
 				callbacks.done.push(callback);
@@ -92,71 +95,6 @@ function jsonpy(o, d, f, a) {
 			runCallbacks();
 		}
 	},
-
-	/**
-	 * build query string
-	 * @param  {object} params
-	 * @param  {[string]} prefix
-	 * @return {string}
-	 */
-	buildParams = function(params, prefix) {
-		var k, p, s = '';
-
-		prefix = prefix || '';
-		for (k in params) {
-			p = prefix ? prefix + '[' + k + ']' : k;
-			if (s) s += '&';
-			s += 
-				(typeof params[k] === 'object') 
-					? buildParams(params[k], p) 
-					: encodeURIComponent(p) + '=' + encodeURIComponent(params[k]);
-		}
-
-		return s;
-	},
-	
-	/**
-	 * build url for request: simply add callback parameter to url
-	 * @return {string}
-	 */
-	buildUrl = function() {
-		var ps = params;
-		ps[field] = name;
-		return url 
-				+ ['?', '&'][+(url.indexOf('?') >= 0)]
-				+ buildParams(ps);
-	},
-	
-	/**
-	 * initialize jsonpy
-	 */
-	init = function() {
-		script.type		= 'text/javascript';
-		script.src		= buildUrl();
-		script.async	= true;
-		
-		script.addEventListener('error', error, true);
-
-		if (typeof jQuery !== 'undefined' && typeof jQuery.Deferred !== 'undefined') {
-			resolver = jQuery.Deferred();
-			promise = resolver;
-		}
-		else if (typeof Q !== 'undefined' &&) {
-			resolver = Q.defer();
-			promise = resolver.promise;
-		}
-		else {
-			promise = createPromise();
-		}
-
-		if (o.done) promise.done(o.done);
-		if (o.fail) promise.fail(o.fail);
-		if (o.always) promise.always(o.always);
-
-		if (d) promise.done(d);
-		if (f) promise.fail(f);
-		if (a) promise.always(a);
-	},
 	
 	/**
 	 * perform request
@@ -200,14 +138,112 @@ function jsonpy(o, d, f, a) {
 		if (status) return;
 		close();
 		resolve(false, arguments);
-	};
-	
+	},
 
+	/**
+	 * build query string
+	 * @param  {object} params
+	 * @param  {[string]} prefix
+	 * @return {string}
+	 */
+	buildParams = function(params, prefix) {
+		var k, p, s = '';
+
+		prefix = prefix || '';
+		for (k in params) {
+			p = prefix ? prefix + '[' + k + ']' : k;
+			if (s) s += '&';
+			s += 
+				(typeof params[k] === 'object') 
+					? buildParams(params[k], p) 
+					: encodeURIComponent(p) + '=' + encodeURIComponent(params[k]);
+		}
+
+		return s;
+	},
+	
+	/**
+	 * build url for request: simply add callback parameter to url
+	 * @return {string}
+	 */
+	buildUrl = function() {
+		var ps = params;
+		ps[field] = name;
+		return url 
+				+ ['?', '&'][+(url.indexOf('?') >= 0)]
+				+ buildParams(ps);
+	},
+
+	/**
+	 * initialize script tag
+	 */
+	initScript = function() {
+		script.type		= 'text/javascript';
+		script.src		= buildUrl();
+		script.async	= true;
+		
+		script.addEventListener('error', error, true);
+	},
+
+	/**
+	 * initialize promise object
+	 */
+	initPromise = function() {
+		// method names in diffirent promise libs may differ
+		var methods = {done: 'done', fail: 'fail', always: 'always'},
+		// concat callbacks from arguments and options
+		callbacks = {done: [o.done, d], fail: [o.fail, f], always: [o.always, a]},
+		name, i;
+
+		// look for available promise libraries 
+		if (typeof jQuery !== 'undefined' && typeof jQuery.Deferred !== 'undefined') {
+			resolver = jQuery.Deferred();
+			promise = resolver;
+		}
+		else if (typeof Q !== 'undefined') {
+			resolver = Q.defer();
+			promise = resolver.promise;
+
+			methods.done = 'then';
+			methods.always = null;
+
+			// Q promise has no always method, emulate it
+			callbacks.done = callbacks.done.concat(callbacks.always);
+			callbacks.fail = callbacks.fail.concat(callbacks.always);
+			callbacks.always = [];
+		}
+		else if (typeof when !== 'undefined') {
+			resolver = when.defer();
+			promise = resolver.promise;
+
+			methods.done = 'then';
+			methods.fail = 'otherwise';
+			methods.always = 'ensure';
+		}
+		else {
+			promise = createNativePromise();
+		}
+
+		// assign callbacks
+		for (name in methods) {
+			if (!methods[name]) continue;
+
+			for (i = 0; i < callbacks[name].length; i++) {
+				if (typeof callbacks[name][i] === 'function') promise[methods[name]](callbacks[name][i]);
+			}
+		}
+	}
+	
+	/**
+	 * initialize jsonpy
+	 */
+	init = function() {
+		initScript();
+		initPromise();
+	};
 	
 	init();
 	connect();
-		
-		
-		
+	
 	return promise;
 }
