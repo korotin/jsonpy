@@ -1,6 +1,6 @@
 # jsonpy
 
-**jsonpy** is a tiny library for work with JSONP. Callback mechanism based on the CommonJS Promises/A pattern, so you can provide multiple callbacks for any possible state.
+**jsonpy** is a tiny library for work with JSONP. Callback mechanism based on the CommonJS Promises/A pattern, so you can provide multiple callbacks for success, fail or both. Also library has support of jQuery Deferred object.
 
 ## Usage
 
@@ -34,6 +34,13 @@ jsonpy({
 	// JSONP url.
 	// Required.
 	url: 'url',
+
+	// URL parameters.
+	// Optional.
+	params: {
+		param1: 'value1',
+		param2: 'value2'
+	},
 
 	// If the name of parameter containing callback name differs from 'callback',
 	// you can customize it by setting 'field' option.

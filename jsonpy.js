@@ -3,6 +3,8 @@ function jsonpy(o, d, f, a) {
 	var name 	= '__jsonp' + parseInt(Math.random() * 10000),
 	// url for request
 	url 		= typeof o === 'string' ? o : o.url,
+	// url parameters
+	params 		= o.params || {},
 	// url parameter name containing callback name ('callback' usually)
 	field 		= o.field || 'callback',
 	// timeout for request (no timeout by default)
@@ -18,8 +20,10 @@ function jsonpy(o, d, f, a) {
 	// callbacks collection
 	callbacks	= {done: [], fail: [], always: []},
 	
-	// promise object returned by jsonpy
-	promise = {
+	/**
+	 * @type {jQuery.Deferred|object}
+	 */
+	promise = typeof jQuery !== 'undefined' && jQuery.Deferred ? jQuery.Deferred() : {
 		done: function(callback) {
 			callbacks.done.push(callback);
 			runCallbacks();
@@ -42,41 +46,85 @@ function jsonpy(o, d, f, a) {
 		}
 	},
 	
-	// helper function, run all callbacks in array with given args
+	/**
+	 * helper function, run all callbacks in array with given args
+	 * @param  {array} cbs  callbacks
+	 * @param  {array} args arguments
+	 */
 	runCallbacksFromArray = function(cbs, args) {
 		while (cb = cbs.shift()) {
 			cb.apply(this, args);
 		}
 	},
 	
-	// run all callbacks for current status; called by promise methods and setStatus()
+	/**
+	 * run all callbacks for current status; called by promise methods and resolve()
+	 */
 	runCallbacks = function() {
 		if (!status) return;
 		
 		runCallbacksFromArray(callbacks[status], cbArgs);
 		runCallbacksFromArray(callbacks.always, cbArgs);
 	},
-	
-	// set status to done or fail and set callback args
-	// function may be called only once
-	setStatus = function(success, args) {
+
+	/**
+	 * resolve promise object and set status
+	 * @param  {bool} success
+	 * @param  {array} args
+	 */
+	resolve = function(success, args) {
 		if (status) return;
 		
 		status = ['fail', 'done'][+success];
-		cbArgs = args;
-		runCallbacks();
+
+		if (typeof promise.resolve !== 'undefined') {
+			// use jQuery Deferred
+			promise[['reject', 'resolve'][+success]].apply(this, args);
+		}
+		else {
+			// use native promise
+			cbArgs = args;
+			runCallbacks();
+		}
+	},
+
+	/**
+	 * build query string
+	 * @param  {object} params
+	 * @param  {[string]} prefix
+	 * @return {string}
+	 */
+	buildParams = function(params, prefix) {
+		var k, p, s = '';
+
+		prefix = prefix || '';
+		for (k in params) {
+			p = prefix ? prefix + '[' + k + ']' : k;
+			if (s) s += '&';
+			s += 
+				(typeof params[k] === 'object') 
+					? buildParams(params[k], p) 
+					: encodeURIComponent(p) + '=' + encodeURIComponent(params[k]);
+		}
+
+		return s;
 	},
 	
-	
-	
-	// build url for request: simply add callback parameter to url
+	/**
+	 * build url for request: simply add callback parameter to url
+	 * @return {string}
+	 */
 	buildUrl = function() {
+		var ps = params;
+		ps[field] = name;
 		return url 
 				+ ['?', '&'][+(url.indexOf('?') >= 0)]
-				+ [encodeURIComponent(field), encodeURIComponent(name)].join('=');
+				+ buildParams(ps);
 	},
 	
-	// initialize jsonpy
+	/**
+	 * initialize jsonpy
+	 */
 	init = function() {
 		script.type		= 'text/javascript';
 		script.src		= buildUrl();
@@ -93,7 +141,9 @@ function jsonpy(o, d, f, a) {
 		if (a) promise.always(a);
 	},
 	
-	// perform request
+	/**
+	 * perform request
+	 */
 	connect = function() {
 		window[name] = success;
 		document.body.appendChild(script);
@@ -102,7 +152,9 @@ function jsonpy(o, d, f, a) {
 		}
 	},
 	
-	// close connection and cleanup
+	/**
+	 * close connection and cleanup
+	 */
 	close = function() {
 		if (status) return;
 		
@@ -115,18 +167,22 @@ function jsonpy(o, d, f, a) {
 		}
 	},
 	
-	// called on request success
+	/**
+	 * called on request success
+	 */
 	success = function() {
 		if (status) return;
 		close();
-		setStatus(true, arguments);
+		resolve(true, arguments);
 	},
 	
-	// called on request error or timeout (if exists)
+	/**
+	 * called on request error or timeout (if exists)
+	 */
 	error = function() {
 		if (status) return;
 		close();
-		setStatus(false, arguments);
+		resolve(false, arguments);
 	};
 	
 
