@@ -77,8 +77,7 @@ jsonpy({
 	// process data
 }).done(function(response) {
 	// process data again
-})
-.fail(function(response) {
+}).fail(function(response) {
 	// handle error
 }).always(function() {
 	// this code will be executed always
