@@ -20,30 +20,35 @@ function jsonpy(o, d, f, a) {
 	// callbacks collection
 	callbacks	= {done: [], fail: [], always: []},
 	
+	resolver = null,
 	/**
-	 * @type {jQuery.Deferred|object}
+	 * @type {jQuery.Deferred|Q.defer|object}
 	 */
-	promise = typeof jQuery !== 'undefined' && jQuery.Deferred ? jQuery.Deferred() : {
-		done: function(callback) {
-			callbacks.done.push(callback);
-			runCallbacks();
+	promise = null,
 
-			return promise;
-		},
-		
-		fail: function(callback) {
-			callbacks.fail.push(callback);
-			runCallbacks();
+	createPromise = function() {
+		return {
+			done: function(callback) {
+				callbacks.done.push(callback);
+				runCallbacks();
+
+				return promise;
+			},
 			
-			return promise;
-		},
-		
-		always: function(callback) {
-			callbacks.always.push(callback);
-			runCallbacks();
+			fail: function(callback) {
+				callbacks.fail.push(callback);
+				runCallbacks();
+				
+				return promise;
+			},
 			
-			return promise;
-		}
+			always: function(callback) {
+				callbacks.always.push(callback);
+				runCallbacks();
+				
+				return promise;
+			}
+		};
 	},
 	
 	/**
@@ -77,9 +82,9 @@ function jsonpy(o, d, f, a) {
 		
 		status = ['fail', 'done'][+success];
 
-		if (typeof promise.resolve !== 'undefined') {
+		if (resolver) {
 			// use jQuery Deferred
-			promise[['reject', 'resolve'][+success]].apply(this, args);
+			resolver[['reject', 'resolve'][+success]].apply(this, args);
 		}
 		else {
 			// use native promise
@@ -131,6 +136,18 @@ function jsonpy(o, d, f, a) {
 		script.async	= true;
 		
 		script.addEventListener('error', error, true);
+
+		if (typeof jQuery !== 'undefined' && typeof jQuery.Deferred !== 'undefined') {
+			resolver = jQuery.Deferred();
+			promise = resolver;
+		}
+		else if (typeof Q !== 'undefined' &&) {
+			resolver = Q.defer();
+			promise = resolver.promise;
+		}
+		else {
+			promise = createPromise();
+		}
 
 		if (o.done) promise.done(o.done);
 		if (o.fail) promise.fail(o.fail);
