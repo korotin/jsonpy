@@ -13,6 +13,9 @@ function jsonpy(o, d, f, a) {
 	
 	// script tag for json
 	script 		= document.createElement('script'),
+
+	// desired promise lib: jquery, q, when.js or internal
+	desiredPromise = o.promise || null,
 	
 	//internal part of promise object
 	resolver = null,
@@ -193,35 +196,64 @@ function jsonpy(o, d, f, a) {
 		var methods = {done: 'done', fail: 'fail', always: 'always'},
 		// concat callbacks from arguments and options
 		callbacks = {done: [o.done, d], fail: [o.fail, f], always: [o.always, a]},
+		// array of available promises
+		availablePromises = [],
 		name, i;
 
 		// look for available promise libraries 
+		// Q - https://github.com/kriskowal/q
+		if (typeof Q !== 'undefined') {
+			availablePromises.push('q');
+		}
+		// when.js - https://github.com/cujojs/when
+		if (typeof when !== 'undefined') {
+			availablePromises.push('when');
+		}
+		// jQuery with Deferred object - http://jquery.com/
 		if (typeof jQuery !== 'undefined' && typeof jQuery.Deferred !== 'undefined') {
-			resolver = jQuery.Deferred();
-			promise = resolver;
+			availablePromises.push('juery');
 		}
-		else if (typeof Q !== 'undefined') {
-			resolver = Q.defer();
-			promise = resolver.promise;
+		// internal promise is always available :)
+		availablePromises.push('internal');
 
-			methods.done = 'then';
-			methods.always = null;
+		// can we use desired promise?
+		desiredPromise = 
+			desiredPromise && ((availablePromises.join(',') + ',').indexOf(desiredPromise + ',') >= 0) 
+				? desiredPromise 
+				: availablePromises[0];
 
-			// Q promise has no always method, emulate it
-			callbacks.done = callbacks.done.concat(callbacks.always);
-			callbacks.fail = callbacks.fail.concat(callbacks.always);
-			callbacks.always = [];
-		}
-		else if (typeof when !== 'undefined') {
-			resolver = when.defer();
-			promise = resolver.promise;
+		// initialize desired promise
+		switch (desiredPromise) {
+			case 'q':
+				resolver = Q.defer();
+				promise = resolver.promise;
 
-			methods.done = 'then';
-			methods.fail = 'otherwise';
-			methods.always = 'ensure';
-		}
-		else {
-			promise = createNativePromise();
+				methods.done = 'then';
+				methods.always = null;
+
+				// Q promise has no always method, emulate it
+				callbacks.done = callbacks.done.concat(callbacks.always);
+				callbacks.fail = callbacks.fail.concat(callbacks.always);
+				callbacks.always = [];
+				break;
+
+			case 'when':
+				resolver = when.defer();
+				promise = resolver.promise;
+
+				methods.done = 'then';
+				methods.fail = 'otherwise';
+				methods.always = 'ensure';
+				break;
+
+			case 'jquery':
+				resolver = jQuery.Deferred();
+				promise = resolver;
+				break;
+
+			default:
+				promise = createNativePromise();
+				break;
 		}
 
 		// assign callbacks
